@@ -36,10 +36,26 @@ app.use(auth(config));
 
 // req.isAuthenticated is provided from the auth router
 app.get('/', (req, res) => {
+  console.log(req.oidc.user); 
   res.send(req.oidc.isAuthenticated() ? 'Logged in' : 'Logged out');
-  
 });
 
+
+app.get('/', (req, res) => {
+  const isAuthenticated = req.oidc.isAuthenticated();
+  const user = req.oidc.user;
+
+  let html = '<html><body>';
+  if (isAuthenticated) {
+    html += `<h1>Welcome, ${user.name}!</h1>`;
+    html += `<p>Email: ${user.email}</p>`;
+  } else {
+    html += '<h1>Please log in to access this page</h1>';
+  }
+  html += '</body></html>';
+
+  res.send(html);
+});
 
 app.get('/cupcakes', async (req, res, next) => {
   try {
@@ -50,6 +66,25 @@ app.get('/cupcakes', async (req, res, next) => {
     next(error);
   }
 });
+
+const findOrCreateUser = (req, res, next) => {
+  const { username, name, email } = req.oidc.user;
+  User.findOrCreate({
+    where: { username },
+    defaults: { name, email }
+  })
+    .then(([user, created]) => {
+      req.user = user;
+      next();
+    })
+    .catch((error) => {
+      console.error('Error finding or creating user:', error);
+      next(error);
+    });
+};
+app.use('/auth', auth(config), findOrCreateUser);
+
+
 
 // error handling middleware
 app.use((error, req, res, next) => {
